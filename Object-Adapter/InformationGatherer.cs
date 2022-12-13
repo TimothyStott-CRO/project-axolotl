@@ -78,7 +78,7 @@ namespace Object_Adapter
         public string[] axisNames { get; set; }
         public string[] absolutePositions { get; set; }
         public string[] relativePositions { get; set; }
-        public string[] machinePostiions { get; set; }
+        public string[] machinePositions { get; set; }
         public string[] axisVoltages { get; set; }
         public double[] axisLoads { get; set; }
         public string[] motorTemps { get; set; }
@@ -134,6 +134,8 @@ namespace Object_Adapter
             }
 
 
+            updateAxisNames();
+
         }
 
 
@@ -177,70 +179,76 @@ namespace Object_Adapter
         {
             _ret = Focas1.cnc_statinfo(_handle, _informationReader);
 
-            this.status = FOCASdictionary.Status[_informationReader.run];
+            if (_ret == Focas1.EW_OK)
+            {
+                this.status = FOCASdictionary.Status[_informationReader.run];
 
-            writerArgs.field = "Status";
-            writerArgs.value = this.status;
-            OnChangeWrite(writerArgs);
-            
-            this.mode = FOCASdictionary.Modes[_informationReader.aut];
+                writerArgs.field = "Status";
+                writerArgs.value = this.status;
+                OnChangeWrite(writerArgs);
 
-            writerArgs.field = "Mode";
-            writerArgs.value = this.mode; 
-            OnChangeWrite(writerArgs);
+                this.mode = FOCASdictionary.Modes[_informationReader.aut];
+
+                writerArgs.field = "Mode";
+                writerArgs.value = this.mode;
+                OnChangeWrite(writerArgs); 
+            }
         }
 
-        public async void updateAllCommandedData()
+        public void updateAllCommandedData()
         {
             _ret = Focas1.cnc_rdcommand(_handle, -1, 1, ref numToRead, _commandReader);
 
-            var commandsArray = _commandReader.FocasClassToArray(_commandReader.cmd0);
-
-            foreach (var item in commandsArray)
+            if (_ret==Focas1.EW_OK)
             {
+                var commandsArray = _commandReader.FocasClassToArray(_commandReader.cmd0);
 
-                switch (Convert.ToChar(item.adrs))
+                foreach (var item in commandsArray)
                 {
-                    case 'T':
-                        this.activeToolNumber = item.cmd_val.ToString();
-                        writerArgs.field = "ActiveTool";
-                        writerArgs.value = this.activeToolNumber;
-                        OnChangeWrite(writerArgs);
 
-                        break;
-                    case 'D':
-                        this.activeRadiusOffset = item.cmd_val.ToString();
-                        writerArgs.field = "ActiveRadiusOffset";
-                        writerArgs.value = this.activeRadiusOffset;
-                        OnChangeWrite(writerArgs);
+                    switch (Convert.ToChar(item.adrs))
+                    {
+                        case 'T':
+                            this.activeToolNumber = item.cmd_val.ToString();
+                            writerArgs.field = "ActiveTool";
+                            writerArgs.value = this.activeToolNumber;
+                            OnChangeWrite(writerArgs);
 
-                        break;
-                    case 'F':
-                        this.programmedFeedRate = item.cmd_val.ToString();
-                        writerArgs.field = "ProgrammedFeedRate";
-                        writerArgs.value = this.programmedFeedRate;
-                        OnChangeWrite(writerArgs);
-                        break;
-                    case 'S':
-                        this.programmedSpindleSpeed = item.cmd_val.ToString();
-                        writerArgs.field = "ProgrammedSpindleSpeed";
-                        writerArgs.value = this.programmedSpindleSpeed;
-                        OnChangeWrite(writerArgs);
-                        break;
-                    case 'M':
-                        this.activeMCodes.Add((int)item.cmd_val);
-                        break;
+                            break;
+                        case 'D':
+                            this.activeRadiusOffset = item.cmd_val.ToString();
+                            writerArgs.field = "ActiveRadiusOffset";
+                            writerArgs.value = this.activeRadiusOffset;
+                            OnChangeWrite(writerArgs);
 
-                    default:
-                        break;
-                }
+                            break;
+                        case 'F':
+                            this.programmedFeedRate = item.cmd_val.ToString();
+                            writerArgs.field = "ProgrammedFeedRate";
+                            writerArgs.value = this.programmedFeedRate;
+                            OnChangeWrite(writerArgs);
+                            break;
+                        case 'S':
+                            this.programmedSpindleSpeed = item.cmd_val.ToString();
+                            writerArgs.field = "ProgrammedSpindleSpeed";
+                            writerArgs.value = this.programmedSpindleSpeed;
+                            OnChangeWrite(writerArgs);
+                            break;
+                        case 'M':
+                            this.activeMCodes.Add((int)item.cmd_val);
+                            break;
 
-                await foreach (var mcode in activeMCodes)
-                {
-                    writerArgs.field = "ActiveMCode";
-                    writerArgs.value = mcode.ToString();
-                    OnChangeWrite(writerArgs);
-                }
+                        default:
+                            break;
+                    }
+
+                    foreach (var mcode in activeMCodes)
+                    {
+                        writerArgs.field = "ActiveMCode";
+                        writerArgs.value = mcode.ToString();
+                        OnChangeWrite(writerArgs);
+                    }
+                } 
             }
         }
 
@@ -250,7 +258,14 @@ namespace Object_Adapter
 
             _ret = Focas1.pmc_rdpmcrng(_handle, 9, 2, 292, 295, 40, pmcReader);
 
-            this.zShift = ((double)pmcReader.ldata[0] / 1000f).ToString();
+            if (_ret==Focas1.EW_OK)
+            {
+                this.zShift = ((double)pmcReader.ldata[0] / 1000f).ToString();
+
+                writerArgs.field = "ZShift";
+                writerArgs.value = this.zShift;
+                OnChangeWrite(writerArgs); 
+            }
         }
 
         public void updateMessages() //needs tested with an actual message
@@ -261,16 +276,19 @@ namespace Object_Adapter
 
             _ret = Focas1.cnc_rdopmsg3(_handle, -1, ref numOfMessages, messageReader);
 
-            var messageArray = messageReader.FocasClassToArray(messageReader.msg1);
-
-            this.messages = new string[messageArray.Length];
-
-            for (int i = 0; i < messageArray.Length; i++)
+            if (_ret == Focas1.EW_OK)
             {
-                if (messageArray[i].datano != -1)
+                var messageArray = messageReader.FocasClassToArray(messageReader.msg1);
+
+                this.messages = new string[messageArray.Length];
+
+                for (int i = 0; i < messageArray.Length; i++)
                 {
-                    this.messages[i] = messageArray[i].data.Substring(0, messageArray[i].char_num - 1);
-                }
+                    if (messageArray[i].datano != -1)
+                    {
+                        this.messages[i] = messageArray[i].data.Substring(0, messageArray[i].char_num - 1);
+                    }
+                } 
             }
         }
 
@@ -283,14 +301,17 @@ namespace Object_Adapter
 
                 _ret = Focas1.cnc_rdalmmsg2(_handle, -1, ref numberOfAlarms, alarmReader);
 
-                var alarmArray = alarmReader.FocasClassToArray(alarmReader.msg1);
-
-                this.alarms = new string[numberOfAlarms];
-
-
-                for (int i = 0; i < numberOfAlarms; i++) //alarm array returns objects up to 10 regardless of number of alarms so loop is dicated by the actual number of alarms
+                if (_ret == Focas1.EW_OK)
                 {
-                    this.alarms[i] = alarmArray[i].alm_no + " : " + alarmArray[i].alm_msg.ToString();
+                    var alarmArray = alarmReader.FocasClassToArray(alarmReader.msg1);
+
+                    this.alarms = new string[numberOfAlarms];
+
+
+                    for (int i = 0; i < numberOfAlarms; i++) //alarm array returns objects up to 10 regardless of number of alarms so loop is dicated by the actual number of alarms
+                    {
+                        this.alarms[i] = alarmArray[i].alm_no + " : " + alarmArray[i].alm_msg.ToString();
+                    } 
                 }
 
             }
@@ -310,18 +331,28 @@ namespace Object_Adapter
 
             _ret = Focas1.cnc_rdgcode(_handle, -1, 1, ref num_gcd, g_code);
 
-            var test = num_gcd;
-
-
-            var codes = g_code.FocasClassToArray(g_code.gcd0);
-
-            codes.ToList().ForEach(code =>
+            if (_ret == Focas1.EW_OK)
             {
-                if (code.code != "")
-                    activeGCodes.Add(code.code);
-            });
+                var test = num_gcd;
 
-            this.activeGCodes = activeGCodes;
+
+                var codes = g_code.FocasClassToArray(g_code.gcd0);
+
+                codes.ToList().ForEach(code =>
+                {
+                    if (code.code != "")
+                        activeGCodes.Add(code.code);
+                });
+
+                this.activeGCodes = activeGCodes;
+
+                foreach (var gcodes in activeGCodes)
+                {
+                    writerArgs.field = "ActiveGCode";
+                    writerArgs.value = gcodes;
+                    OnChangeWrite(writerArgs);
+                } 
+            }
         }
 
         public void readParametersFromArray()
@@ -330,11 +361,32 @@ namespace Object_Adapter
 
             _ret = Focas1.cnc_rdparam_ext(_handle, parametersToBeRead, 4, _paramaterReaderMultiple);
 
-            this.resetablePartCounter = _paramaterReaderMultiple.prm1.data.data1.prm_val.ToString();
-            this.partCounter = _paramaterReaderMultiple.prm2.data.data1.prm_val.ToString();
-            this.machineHours = _paramaterReaderMultiple.prm3.data.data1.prm_val.ToString();
-            this.spindleHours = _paramaterReaderMultiple.prm4.data.data1.prm_val.ToString();
+            if (_ret == Focas1.EW_OK)
+            {
+                this.resetablePartCounter = _paramaterReaderMultiple.prm1.data.data1.prm_val.ToString();
 
+                writerArgs.field = "ResetablePartCounter";
+                writerArgs.value = this.resetablePartCounter;
+                OnChangeWrite(writerArgs);
+
+                this.partCounter = _paramaterReaderMultiple.prm2.data.data1.prm_val.ToString();
+
+                writerArgs.field = "PartCounter";
+                writerArgs.value = this.partCounter;
+                OnChangeWrite(writerArgs);
+
+                this.machineHours = _paramaterReaderMultiple.prm3.data.data1.prm_val.ToString();
+
+                writerArgs.field = "MachineHours";
+                writerArgs.value = this.machineHours;
+                OnChangeWrite(writerArgs);
+
+                this.spindleHours = _paramaterReaderMultiple.prm4.data.data1.prm_val.ToString();
+
+                writerArgs.field = "SpindleHours";
+                writerArgs.value = this.spindleHours;
+                OnChangeWrite(writerArgs); 
+            }
 
         }
 
@@ -342,44 +394,83 @@ namespace Object_Adapter
         {
             _ret = Focas1.cnc_acts(_handle, _actualDataReader);
 
-            this.actualSpindleSpeed = _actualDataReader.data.ToString();
+            if (_ret == Focas1.EW_OK)
+            {
+                this.actualSpindleSpeed = _actualDataReader.data.ToString();
+
+                writerArgs.field = "ActualSpindleSpeed";
+                writerArgs.value = this.actualSpindleSpeed;
+                OnChangeWrite(writerArgs); 
+            }
         }
 
         public void updateSpindleSpeedOverride()
         {
             _ret = Focas1.pmc_rdpmcrng(_handle, 0, 0, (ushort)30, (ushort)30, 16, _pmcReader);
 
-            this.spindleSpeedOverride = _pmcReader.cdata[0].ToString();
+            if (_ret == Focas1.EW_OK)
+            {
+                this.spindleSpeedOverride = _pmcReader.cdata[0].ToString();
+
+                writerArgs.field = "SpindleSpeedOverride";
+                writerArgs.value = this.spindleSpeedOverride;
+                OnChangeWrite(writerArgs); 
+            }
         }
 
         public void updateFeedRateOverride()
         {
             _ret = Focas1.pmc_rdpmcrng(_handle, 0, 0, (ushort)12, (ushort)12, 16, _pmcReader);
 
-            this.feedRateOverride = _pmcReader.cdata[0].ToString();
+            if (_ret == Focas1.EW_OK)
+            {
+                this.feedRateOverride = _pmcReader.cdata[0].ToString();
+
+                writerArgs.field = "FeedRateOVerride";
+                writerArgs.value = this.feedRateOverride;
+                OnChangeWrite(writerArgs); 
+            }
         }
 
         public void updateRapidRateOverride()
         {
             _ret = Focas1.pmc_rdpmcrng(_handle, 0, 0, (ushort)14, (ushort)14, 16, _pmcReader);
 
-            switch (_pmcReader.cdata[0])
+            if (_ret == Focas1.EW_OK)
             {
-                case 0:
-                    this.rapidOverride = "100";
-                    break;
-                case 1:
-                    this.rapidOverride = "50";
-                    break;
-                case 2:
-                    this.rapidOverride = "25";
-                    break;
-                case 3:
-                    this.rapidOverride = "5";
-                    break;
-                default:
-                    this.rapidOverride = "0";
-                    break;
+                switch (_pmcReader.cdata[0])
+                {
+                    case 0:
+                        this.rapidOverride = "100";
+                        writerArgs.field = "RapidRateOverride";
+                        writerArgs.value = this.rapidOverride;
+                        OnChangeWrite(writerArgs);
+                        break;
+                    case 1:
+                        this.rapidOverride = "50";
+                        writerArgs.field = "RapidRateOverride";
+                        writerArgs.value = this.rapidOverride;
+                        OnChangeWrite(writerArgs);
+                        break;
+                    case 2:
+                        this.rapidOverride = "25";
+                        writerArgs.field = "RapidRateOverride";
+                        writerArgs.value = this.rapidOverride;
+                        OnChangeWrite(writerArgs);
+                        break;
+                    case 3:
+                        this.rapidOverride = "5";
+                        writerArgs.field = "RapidRateOverride";
+                        writerArgs.value = this.rapidOverride;
+                        OnChangeWrite(writerArgs);
+                        break;
+                    default:
+                        this.rapidOverride = "0";
+                        writerArgs.field = "RapidRateOverride";
+                        writerArgs.value = this.rapidOverride;
+                        OnChangeWrite(writerArgs);
+                        break;
+                } 
             }
         }
 
@@ -389,7 +480,14 @@ namespace Object_Adapter
 
             _ret = Focas1.cnc_exeprgname(_handle, programReader);
 
-            this.programName = new string(programReader.name).Trim('\0');
+            if (_ret == Focas1.EW_OK)
+            {
+                this.programName = new string(programReader.name).Trim('\0');
+
+                writerArgs.field = "Program Name";
+                writerArgs.value = this.programName;
+                OnChangeWrite(writerArgs); 
+            }
         }
 
         public void updateBlockProgramData()
@@ -400,13 +498,16 @@ namespace Object_Adapter
 
             _ret = Focas1.cnc_rdexecprog(_handle, ref length, out blockNum, lineData);
 
-            var stringToEnque = new string(lineData);
-
-            this.blockProgramData.Enqueue(stringToEnque);
-
-            if (blockProgramData.Count > 2)
+            if (_ret == Focas1.EW_OK)
             {
-                blockProgramData.Dequeue();
+                var stringToEnque = new string(lineData);
+
+                this.blockProgramData.Enqueue(stringToEnque);
+
+                if (blockProgramData.Count > 2)
+                {
+                    blockProgramData.Dequeue();
+                } 
             }
         }
 
@@ -418,8 +519,14 @@ namespace Object_Adapter
 
             _ret = Focas1.cnc_rdexecprog(_handle, ref length, out blockNum, lineData);
 
+            if (_ret == Focas1.EW_OK)
+            {
+                this.activeLine = new string(lineData).TrimEnd('\0').Split('\n').First();
 
-            this.activeLine = new string(lineData).TrimEnd('\0').Split('\n').First();
+                writerArgs.field = "CurrentProgramLine";
+                writerArgs.value = this.activeLine;
+                OnChangeWrite(writerArgs); 
+            }
         }
 
         public void updateBlockNumber()
@@ -428,7 +535,14 @@ namespace Object_Adapter
 
             _ret = Focas1.cnc_rdblkcount(_handle, out block);
 
-            this.activeBlockNumber = block.ToString();
+            if (_ret == Focas1.EW_OK)
+            {
+                this.activeBlockNumber = block.ToString();
+
+                writerArgs.field = "BlockNumber";
+                writerArgs.value = this.activeBlockNumber;
+                OnChangeWrite(writerArgs); 
+            }
         }
 
         public void updateSequenceNumber()
@@ -437,7 +551,14 @@ namespace Object_Adapter
 
             _ret = Focas1.cnc_rdseqnum(_handle, seqNum);
 
-            this.sequenceNumber = seqNum.data.ToString();
+            if (_ret == Focas1.EW_OK)
+            {
+                this.sequenceNumber = seqNum.data.ToString();
+
+                writerArgs.field = "SequenceNumber";
+                writerArgs.value = this.sequenceNumber;
+                OnChangeWrite(writerArgs); 
+            }
         }
 
         public void updateProgramNumber()
@@ -446,14 +567,28 @@ namespace Object_Adapter
 
             _ret = Focas1.cnc_rdprgnum(_handle, reader);
 
-            this.programNumber = reader.data.ToString();
+            if (_ret == Focas1.EW_OK)
+            {
+                this.programNumber = reader.data.ToString();
+
+                writerArgs.field = "ProgramNumber";
+                writerArgs.value = this.programNumber;
+                OnChangeWrite(writerArgs); 
+            }
         }
 
         public void updateActualFeedRate()
         {
             _ret = Focas1.cnc_actf(_handle, _actualDataReader);
 
-            this.actualFeedRate = _actualDataReader.data.ToString();
+            if (_ret == Focas1.EW_OK)
+            {
+                this.actualFeedRate = _actualDataReader.data.ToString();
+
+                writerArgs.field = "ActualFeedRate";
+                writerArgs.value = this.actualFeedRate;
+                OnChangeWrite(writerArgs); 
+            }
         }
 
         public void updateAxisNames()
@@ -465,20 +600,26 @@ namespace Object_Adapter
 
             ret = Focas1.cnc_exaxisname(_handle, 0, ref numberToGet, namesReader);
 
-            var namesArrayFromFocasClass = namesReader.FocasClassToArray(namesReader.ToString());
-
-            string[] namesArray = new string[numberToGet];
-
-            this._numOfAxes = numberToGet;
-
-            for (int i = 0; i < numberToGet; i++)
+            if (_ret == Focas1.EW_OK)
             {
-                namesArray[i] = namesArrayFromFocasClass[i];
+                var namesArrayFromFocasClass = namesReader.FocasClassToArray(namesReader.ToString());
+
+                string[] namesArray = new string[numberToGet];
+
+                this._numOfAxes = numberToGet;
+
+                for (int i = 0; i < numberToGet; i++)
+                {
+                    namesArray[i] = namesArrayFromFocasClass[i];
+                    string axisNumberToWrite = "Axis" + i;
+                    writerArgs.field = axisNumberToWrite;
+                    writerArgs.value = namesArray[i];
+                    OnChangeWrite(writerArgs);
+                }
+
+
+                this.axisNames = namesArray; 
             }
-
-
-            this.axisNames = namesArray;
-
         }
 
         public void updateAbsolutePositions()
@@ -491,8 +632,17 @@ namespace Object_Adapter
             for (int i = 0; i < _numOfAxes; i++)
             {
                 _ret = Focas1.cnc_absolute2(_handle, (short)(i + 1), 12, _axisPositionReader); //axis IDs for this call are not 0 based.
-                this.absolutePositions[i] = _axisPositionReader.data[0].ToString();
+                if (_ret == Focas1.EW_OK)
+                {
+                    this.absolutePositions[i] = _axisPositionReader.data[0].ToString();
+
+                    string axisNumberToWrite = "Axis" + i + "AbsPos";
+                    writerArgs.field = axisNumberToWrite;
+                    writerArgs.value = this.absolutePositions[i];
+                    OnChangeWrite(writerArgs); 
+                }
             }
+
 
         }
 
@@ -505,22 +655,36 @@ namespace Object_Adapter
             for (int i = 0; i < _numOfAxes; i++)
             {
                 _ret = Focas1.cnc_relative2(_handle, (short)(i + 1), 12, _axisPositionReader); //axis IDs for this call are not 0 based.
-                this.relativePositions[i] = _axisPositionReader.data[0].ToString();
+                if (_ret == Focas1.EW_OK)
+                {
+                    this.relativePositions[i] = _axisPositionReader.data[0].ToString();
+
+                    string axisNumberToWrite = "Axis" + i + "RelPos";
+                    writerArgs.field = axisNumberToWrite;
+                    writerArgs.value = this.relativePositions[i];
+                    OnChangeWrite(writerArgs); 
+                }
             }
-
-
         }
 
         public void updateMachinePostiions()
         {
             if (_numOfAxes == 0) return;
 
-            this.machinePostiions = new string[_numOfAxes];
+            this.machinePositions = new string[_numOfAxes];
 
             for (int i = 0; i < _numOfAxes; i++)
             {
                 _ret = Focas1.cnc_machine(_handle, (short)(i + 1), 12, _axisPositionReader); //axis IDs for this call are not 0 based.
-                this.machinePostiions[i] = _axisPositionReader.data[0].ToString();
+                if (_ret == Focas1.EW_OK)
+                {
+                    this.machinePositions[i] = _axisPositionReader.data[0].ToString();
+
+                    string axisNumberToWrite = "Axis" + i + "MacPos";
+                    writerArgs.field = axisNumberToWrite;
+                    writerArgs.value = this.machinePositions[i];
+                    OnChangeWrite(writerArgs); 
+                }
             }
         }
 
@@ -533,7 +697,15 @@ namespace Object_Adapter
             for (int i = 0; i < _numOfAxes; i++)
             {
                 _ret = Focas1.cnc_diagnoss(_handle, 752, (short)(i + 1), (short)12, _diagnosticsReader);
-                this.axisVoltages[i] = _diagnosticsReader.ldata.ToString();
+                if (_ret == Focas1.EW_OK)
+                {
+                    this.axisVoltages[i] = _diagnosticsReader.ldata.ToString();
+
+                    string axisNumberToWrite = "Axis" + i + "Voltage";
+                    writerArgs.field = axisNumberToWrite;
+                    writerArgs.value = this.axisVoltages[i];
+                    OnChangeWrite(writerArgs); 
+                }
             }
 
 
@@ -547,15 +719,23 @@ namespace Object_Adapter
 
             _ret = Focas1.cnc_rdsvmeter(_handle, ref numOfAx, _motorLoadReader);
 
-            this.axisLoads = new double[numOfAx];
-
-            var loadsArray = _motorLoadReader.FocasClassToArray(_motorLoadReader.svload1);
-
-            for (int i = 0; i < numOfAx; i++)
+            if (true)
             {
-                this.axisLoads[i] = loadsArray[i].data;
-            }
+                this.axisLoads = new double[numOfAx];
 
+                var loadsArray = _motorLoadReader.FocasClassToArray(_motorLoadReader.svload1);
+
+                for (int i = 0; i < numOfAx; i++)
+                {
+                    this.axisLoads[i] = loadsArray[i].data;
+
+                    string axisNumberToWrite = "Axis" + i + "Load";
+                    writerArgs.field = axisNumberToWrite;
+                    writerArgs.value = this.axisLoads[i].ToString();
+                    OnChangeWrite(writerArgs);
+                }
+
+            }
         }
 
         public void updateMotorTemps()
@@ -567,7 +747,16 @@ namespace Object_Adapter
             for (int i = 0; i < this._numOfAxes; i++)
             {
                 _ret = Focas1.cnc_diagnoss(_handle, 308, (short)(i + 1), 12, _diagnosticsReader);
-                this.motorTemps[i] = _diagnosticsReader.ldata.ToString();
+                if (_ret == Focas1.EW_OK)
+                {
+                    this.motorTemps[i] = _diagnosticsReader.ldata.ToString();
+
+
+                    string axisNumberToWrite = "Axis" + i + "MotorTemp";
+                    writerArgs.field = axisNumberToWrite;
+                    writerArgs.value = this.motorTemps[i];
+                    OnChangeWrite(writerArgs); 
+                }
             }
         }
 
@@ -580,15 +769,21 @@ namespace Object_Adapter
             for (int i = 0; i < this._numOfAxes; i++)
             {
                 _ret = Focas1.cnc_diagnoss(_handle, 309, (short)(i + 1), 12, _diagnosticsReader);
-                this.pulseEncoderTemps[i] = _diagnosticsReader.ldata.ToString();
+                if (_ret == Focas1.EW_OK)
+                {
+                    this.pulseEncoderTemps[i] = _diagnosticsReader.ldata.ToString();
+
+                    string axisNumberToWrite = "Axis" + i + "EncoderTemp";
+                    writerArgs.field = axisNumberToWrite;
+                    writerArgs.value = this.pulseEncoderTemps[i];
+                    OnChangeWrite(writerArgs); 
+                }
             }
 
         }
 
         public void updateAll()
         {
-            updateAxisNames();
-
             updateStatusandMode();
 
             updateAllCommandedData();

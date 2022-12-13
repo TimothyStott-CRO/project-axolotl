@@ -27,10 +27,9 @@ namespace Application
 
             while (_info._isConnected) //loop to keep updating. 
             {
-                _info.updateStatusandMode();
-                _info.updateAllCommandedData();
+                _info.updateAll();
 
-                Thread.Sleep(5000);
+                Thread.Sleep(1000);
             }
         }
     }
