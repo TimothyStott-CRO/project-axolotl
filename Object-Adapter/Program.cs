@@ -1,52 +1,37 @@
-﻿using System.Threading;
-using System;
-using System.Diagnostics;
+﻿using Newtonsoft.Json;
 using Object_Adapter;
-using Microsoft.Extensions.Configuration;
 using Object_Adapter.Settings;
-using Newtonsoft.Json;
-using System.Runtime.CompilerServices;
+using System.Diagnostics;
 
 namespace Application
 {
     class ObjectAdapter
     {
-        static InformationGatherer _info = new InformationGatherer(new string[5]);
-        static GlobalSettings _settings = new GlobalSettings();
+        static InformationGatherer _info;
+        static GlobalSettings _settings;
+
 
         static void Main(string[] args)
         {
 
-            //Build Settings for Machine and Database
-            if (File.Exists(@".\appsettings.json")) 
+            if (File.Exists(@".\appsettings.json"))
             {
-                try
-                {
-                    _settings = JsonConvert.DeserializeObject<GlobalSettings>(File.ReadAllText(@".\appsettings.json"));
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine(ex.ToString());
-                    _settings = new GlobalSettings();
-                }             
+                _settings = JsonConvert.DeserializeObject<GlobalSettings>(File.ReadAllText(@".\appsettings.json"));
 
             }
+            _info = new InformationGatherer(_settings.getSettings()); //create class to gather info
 
-            //rough check for settings
-            if(_settings.nullSettingsExist())
+            _info.OnDetectedChange += _info.DetectedChange; //subscribe to change detection
+
+            _info.updateAll(); //update information for first time
+
+            while (_info._isConnected) //loop to keep updating. 
             {
-                //write to debug
+                _info.updateStatusandMode();
+                _info.updateAllCommandedData();
+
+                Thread.Sleep(5000);
             }
-
-            _info = new InformationGatherer(_settings.getSettings());
-
-            _info.updateAll();
-
-            for (int i = 0; i < 10; i++)
-            {
-                _info.testWrite();
-            }
-
         }
     }
 }

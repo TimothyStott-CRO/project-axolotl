@@ -1,24 +1,14 @@
 ﻿using fanuc_adapter.Connection;
 using fanuc_adapter.FanucFiles;
+using InfluxDB.Client;
+using InfluxDB.Client.Writes;
 using Object_Adapter.IO;
 using OnsrudFocasService;
-using System;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Threading.Tasks;
-using InfluxDB.Client;
-using InfluxDB.Client.Api.Domain;
-using InfluxDB.Client.Core;
-using InfluxDB.Client.Writes;
-
-
 
 namespace Object_Adapter
 {
-    
+
 
     public class InformationGatherer
     {
@@ -26,7 +16,7 @@ namespace Object_Adapter
         private ushort _handle;
         private short _ret;
         private short _numOfAxes;
-                
+
         private Focas1.ODBST _informationReader = new Focas1.ODBST(); //used for Status and Mode Call
 
         private Focas1.ODBCMD _commandReader = new Focas1.ODBCMD(); //used for cnc_rdcommand
@@ -46,52 +36,52 @@ namespace Object_Adapter
         public bool _isConnected { get; set; }
 
         //Basic Machine Information
-        public string mode { get; set; } 
-        public string status { get; set; } 
-        public string zShift { get; set; } 
-        public string machineHours { get; set; } 
-        public string[] messages { get; set; } 
-        public string[] alarms { get; set; } 
+        public string mode { get; set; }
+        public string status { get; set; }
+        public string zShift { get; set; }
+        public string machineHours { get; set; }
+        public string[] messages { get; set; }
+        public string[] alarms { get; set; }
         public string scale { get; set; }
-        public List<string> activeGCodes { get; set; } = new List<string>(); 
+        public List<string> activeGCodes { get; set; } = new List<string>();
         public List<int> activeMCodes { get; set; } = new List<int>();
-        public string partCounter { get; set; } 
-        public string resetablePartCounter { get; set; } 
-        public string activeToolNumber { get; set; } 
-        public string activeHeightOffset { get; set; } 
-        public string activeRadiusOffset { get; set; } 
+        public string partCounter { get; set; }
+        public string resetablePartCounter { get; set; }
+        public string activeToolNumber { get; set; }
+        public string activeHeightOffset { get; set; }
+        public string activeRadiusOffset { get; set; }
 
 
 
         //Spindle Information
-        public string programmedSpindleSpeed { get; set; } 
-        public string actualSpindleSpeed { get; set; } 
-        public string spindleSpeedOverride { get; set; } 
-        public string spindleHours { get; set; } 
+        public string programmedSpindleSpeed { get; set; }
+        public string actualSpindleSpeed { get; set; }
+        public string spindleSpeedOverride { get; set; }
+        public string spindleHours { get; set; }
 
 
         //Program Information
         public string programName { get; set; }
         public Queue<string> blockProgramData { get; set; } = new Queue<string>();
-        public string activeLine { get; set; } 
-        public string activeBlockNumber { get; set; } 
-        public string sequenceNumber { get; set; } 
-        public string programNumber { get; set; } 
-        public string programmedFeedRate { get; set; } 
-        public string actualFeedRate { get; set; } 
-        public string feedRateOverride { get; set; } 
-        public string rapidOverride { get; set; } 
+        public string activeLine { get; set; }
+        public string activeBlockNumber { get; set; }
+        public string sequenceNumber { get; set; }
+        public string programNumber { get; set; }
+        public string programmedFeedRate { get; set; }
+        public string actualFeedRate { get; set; }
+        public string feedRateOverride { get; set; }
+        public string rapidOverride { get; set; }
 
 
         //Axis Information
 
-        public string[] axisNames { get; set; } 
-        public string[] absolutePositions { get; set; } 
-        public string[] relativePositions { get; set; } 
-        public string[] machinePostiions { get; set; } 
-        public string[] axisVoltages { get; set; } 
-        public double[] axisLoads { get; set; } 
-        public string[] motorTemps { get; set; } 
+        public string[] axisNames { get; set; }
+        public string[] absolutePositions { get; set; }
+        public string[] relativePositions { get; set; }
+        public string[] machinePostiions { get; set; }
+        public string[] axisVoltages { get; set; }
+        public double[] axisLoads { get; set; }
+        public string[] motorTemps { get; set; }
         public string[] pulseEncoderTemps { get; set; }
 
         //IO Data
@@ -100,8 +90,9 @@ namespace Object_Adapter
 
         private List<InputOutput> iOs = new List<InputOutput>();
 
-        //Database Info
+        //DB Info
         private InfluxDBClient _client = null;
+        private DBwriterArgs writerArgs = new DBwriterArgs();
         private string _machineIP;
         private string _token;
         private string _bucket;
@@ -109,9 +100,10 @@ namespace Object_Adapter
         private string _host;
 
 
+
+
+
         /// <summary>
-        /// Requires Machine IP if not null, and all DB building information.
-        /// args in order IP, token, bucket, org, host. 
         /// </summary>
         /// <param name="args"></param>
         public InformationGatherer(string[] args)
@@ -120,6 +112,7 @@ namespace Object_Adapter
             {
                 parseArgs(args);
                 buildClient();
+                buildDBWriterArgs();
             }
             catch (Exception)
             {
@@ -133,6 +126,7 @@ namespace Object_Adapter
                 _handle = _conn.Handle;
                 buildParametersArray();
                 readSymbolsTxtFile();
+
             }
             else
             {
@@ -141,40 +135,31 @@ namespace Object_Adapter
 
 
         }
-        public void testWrite()
-        {
-            ///*
-            var point = PointData.Measurement("testData").Tag("SerialNumber", "RetroM").Field("Status", status);
-            using (var writeApi = this._client.GetWriteApi())
-            {
-                writeApi.WritePoint(point,this._bucket,this._org);
-            }
-            //*/
-            /*
-            var data = $"mem,serialnumber=retroM status={this.status}";
-            using (var writeApi = this._client.GetWriteApi())
-            {
-                writeApi.WriteRecord(data, WritePrecision.Ns, this._bucket, this._org);
-            }
-            */
-        }
+
 
         private void parseArgs(string[] args)
         {
             this._machineIP = args[0];
             this._token = args[1];
-            this._bucket= args[2];
-            this._org= args[3];
-            this._host= args[4];
+            this._bucket = args[2];
+            this._org = args[3];
+            this._host = args[4];
         }
 
         private void buildClient()
         {
             var options = new InfluxDBClientOptions(this._host);
-            options.Bucket= this._bucket;
-            options.Org= this._org;
-            options.Token= this._token;
-            this._client= new InfluxDBClient(options);
+            options.Bucket = this._bucket;
+            options.Org = this._org;
+            options.Token = this._token;
+            this._client = new InfluxDBClient(options);
+        }
+
+        private void buildDBWriterArgs()
+        {
+            writerArgs.dBClient= this._client;
+            writerArgs.bucket= this._bucket;
+            writerArgs.org= this._org;
         }
 
         public void buildParametersArray()
@@ -194,11 +179,18 @@ namespace Object_Adapter
 
             this.status = FOCASdictionary.Status[_informationReader.run];
 
+            writerArgs.field = "Status";
+            writerArgs.value = this.status;
+            OnChangeWrite(writerArgs);
+            
             this.mode = FOCASdictionary.Modes[_informationReader.aut];
 
+            writerArgs.field = "Mode";
+            writerArgs.value = this.mode; 
+            OnChangeWrite(writerArgs);
         }
 
-        public void updateAllCommandedData()
+        public async void updateAllCommandedData()
         {
             _ret = Focas1.cnc_rdcommand(_handle, -1, 1, ref numToRead, _commandReader);
 
@@ -206,19 +198,34 @@ namespace Object_Adapter
 
             foreach (var item in commandsArray)
             {
+
                 switch (Convert.ToChar(item.adrs))
                 {
                     case 'T':
                         this.activeToolNumber = item.cmd_val.ToString();
+                        writerArgs.field = "ActiveTool";
+                        writerArgs.value = this.activeToolNumber;
+                        OnChangeWrite(writerArgs);
+
                         break;
                     case 'D':
                         this.activeRadiusOffset = item.cmd_val.ToString();
+                        writerArgs.field = "ActiveRadiusOffset";
+                        writerArgs.value = this.activeRadiusOffset;
+                        OnChangeWrite(writerArgs);
+
                         break;
                     case 'F':
                         this.programmedFeedRate = item.cmd_val.ToString();
+                        writerArgs.field = "ProgrammedFeedRate";
+                        writerArgs.value = this.programmedFeedRate;
+                        OnChangeWrite(writerArgs);
                         break;
                     case 'S':
                         this.programmedSpindleSpeed = item.cmd_val.ToString();
+                        writerArgs.field = "ProgrammedSpindleSpeed";
+                        writerArgs.value = this.programmedSpindleSpeed;
+                        OnChangeWrite(writerArgs);
                         break;
                     case 'M':
                         this.activeMCodes.Add((int)item.cmd_val);
@@ -227,6 +234,13 @@ namespace Object_Adapter
                     default:
                         break;
                 }
+
+                await foreach (var mcode in activeMCodes)
+                {
+                    writerArgs.field = "ActiveMCode";
+                    writerArgs.value = mcode.ToString();
+                    OnChangeWrite(writerArgs);
+                }
             }
         }
 
@@ -234,7 +248,7 @@ namespace Object_Adapter
         {
             var pmcReader = new Focas1.IODBPMC2();
 
-            _ret = Focas1.pmc_rdpmcrng(_handle, 9,2,292,295,40,pmcReader);
+            _ret = Focas1.pmc_rdpmcrng(_handle, 9, 2, 292, 295, 40, pmcReader);
 
             this.zShift = ((double)pmcReader.ldata[0] / 1000f).ToString();
         }
@@ -274,7 +288,7 @@ namespace Object_Adapter
                 this.alarms = new string[numberOfAlarms];
 
 
-                for (int i = 0; i<numberOfAlarms; i++) //alarm array returns objects up to 10 regardless of number of alarms so loop is dicated by the actual number of alarms
+                for (int i = 0; i < numberOfAlarms; i++) //alarm array returns objects up to 10 regardless of number of alarms so loop is dicated by the actual number of alarms
                 {
                     this.alarms[i] = alarmArray[i].alm_no + " : " + alarmArray[i].alm_msg.ToString();
                 }
@@ -285,7 +299,7 @@ namespace Object_Adapter
                 return;
             }
 
-        } 
+        }
 
         public void updateGCodes()
         {
@@ -326,7 +340,7 @@ namespace Object_Adapter
 
         public void updateActualSpindleSpeed()
         {
-            _ret = Focas1.cnc_acts(_handle,_actualDataReader);
+            _ret = Focas1.cnc_acts(_handle, _actualDataReader);
 
             this.actualSpindleSpeed = _actualDataReader.data.ToString();
         }
@@ -390,7 +404,7 @@ namespace Object_Adapter
 
             this.blockProgramData.Enqueue(stringToEnque);
 
-            if (blockProgramData.Count>2)
+            if (blockProgramData.Count > 2)
             {
                 blockProgramData.Dequeue();
             }
@@ -405,7 +419,7 @@ namespace Object_Adapter
             _ret = Focas1.cnc_rdexecprog(_handle, ref length, out blockNum, lineData);
 
 
-            this.activeLine =  new string(lineData).TrimEnd('\0').Split('\n').First();
+            this.activeLine = new string(lineData).TrimEnd('\0').Split('\n').First();
         }
 
         public void updateBlockNumber()
@@ -462,7 +476,7 @@ namespace Object_Adapter
                 namesArray[i] = namesArrayFromFocasClass[i];
             }
 
-            
+
             this.axisNames = namesArray;
 
         }
@@ -476,7 +490,7 @@ namespace Object_Adapter
 
             for (int i = 0; i < _numOfAxes; i++)
             {
-                _ret = Focas1.cnc_absolute2(_handle, (short)(i+1), 12, _axisPositionReader); //axis IDs for this call are not 0 based.
+                _ret = Focas1.cnc_absolute2(_handle, (short)(i + 1), 12, _axisPositionReader); //axis IDs for this call are not 0 based.
                 this.absolutePositions[i] = _axisPositionReader.data[0].ToString();
             }
 
@@ -495,8 +509,8 @@ namespace Object_Adapter
             }
 
 
-        }    
-            
+        }
+
         public void updateMachinePostiions()
         {
             if (_numOfAxes == 0) return;
@@ -510,7 +524,7 @@ namespace Object_Adapter
             }
         }
 
-        public void updateAxisVoltages() 
+        public void updateAxisVoltages()
         {
             if (_numOfAxes == 0) return;
 
@@ -518,14 +532,14 @@ namespace Object_Adapter
 
             for (int i = 0; i < _numOfAxes; i++)
             {
-                _ret = Focas1.cnc_diagnoss(_handle, 752, (short)(i+1), (short)12, _diagnosticsReader);
-                this.axisVoltages[i] = _diagnosticsReader.ldata.ToString();          
+                _ret = Focas1.cnc_diagnoss(_handle, 752, (short)(i + 1), (short)12, _diagnosticsReader);
+                this.axisVoltages[i] = _diagnosticsReader.ldata.ToString();
             }
 
 
         }
 
-        public void updateAxisLoads() 
+        public void updateAxisLoads()
         {
             Focas1.ODBSVLOAD _motorLoadReader = new Focas1.ODBSVLOAD();
 
@@ -546,13 +560,13 @@ namespace Object_Adapter
 
         public void updateMotorTemps()
         {
-            if(_numOfAxes == 0)  return; 
+            if (_numOfAxes == 0) return;
 
             this.motorTemps = new string[this._numOfAxes];
 
             for (int i = 0; i < this._numOfAxes; i++)
             {
-                _ret = Focas1.cnc_diagnoss(_handle, 308, (short)(i+1), 12, _diagnosticsReader);
+                _ret = Focas1.cnc_diagnoss(_handle, 308, (short)(i + 1), 12, _diagnosticsReader);
                 this.motorTemps[i] = _diagnosticsReader.ldata.ToString();
             }
         }
@@ -650,7 +664,7 @@ namespace Object_Adapter
                             Bit = Convert.ToUInt16(tempstringArray[1].Split(".")[1].First().ToString()),
                             Value = false
 
-                        }) ; 
+                        });
                     }
                 }
             }
@@ -666,6 +680,27 @@ namespace Object_Adapter
             }
         }
 
-        
+        public event EventHandler<DBwriterArgs> OnDetectedChange;
+
+        public void DetectedChange(object sender, DBwriterArgs e)
+        {
+            var point = PointData.Measurement("MachineInformation").Field(e.field,e.value);
+            using (var writeApi = e.dBClient.GetWriteApi())
+            {
+                writeApi.WritePoint(point,e.bucket,e.org);
+            }
+            Debug.WriteLine("Write attempted");
+        }
+
+        protected virtual void OnChangeWrite(DBwriterArgs e)
+        {
+            EventHandler<DBwriterArgs> handler = OnDetectedChange;
+            if(handler != null)
+            {
+                handler(this, e);
+            }
+        }
+
+
     }
 }
